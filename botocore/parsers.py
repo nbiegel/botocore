@@ -647,7 +647,6 @@ class BaseJSONParser(ResponseParser):
         if shape.is_document_type:
             final_parsed = value
         else:
-            member_shapes = shape.members
             if value is None:
                 # If the comes across the wire as "null" (None in python),
                 # we should be returning this unchanged, instead of as an
@@ -657,14 +656,30 @@ class BaseJSONParser(ResponseParser):
             if self._has_unknown_tagged_union_member(shape, value):
                 tag = self._get_first_key(value)
                 return self._handle_unknown_tagged_union_member(tag)
-            for member_name in member_shapes:
-                member_shape = member_shapes[member_name]
-                json_name = member_shape.serialization.get('name', member_name)
-                raw_value = value.get(json_name)
-                if raw_value is not None:
+
+            # It is important to loop through the response value keys instead of the
+            # shape members since a shape can be a union structure. This significantly
+            # reduces the number of iterations needed to parse a union structure from the
+            # number of the union types to the number of keys in the value (likely just one).
+            #
+            # This particularly helps with dynamodb parsing of AttributeValue since dynamodb
+            # shapes customer data to AttributeMap's of AttributeName and AttributeValue, recursively.
+            # This can lead to this method being called millions of times depending on the data
+            # returned.
+            serialized_ref_members = shape.serialized_ref_members
+            for key, data in value.items():
+                member_pair = serialized_ref_members.get(key)
+                if member_pair:
+                    member_name, member_shape = member_pair
                     final_parsed[member_name] = self._parse_shape(
-                        member_shapes[member_name], raw_value
+                        member_shape, data
                     )
+                #else:
+                #    The key in the value is not in the Shape which is a concern.
+                #    If services are responding with extra keys that are not in the Shape,
+                #    this "union" performance optimization becomes a degradation. Service teams
+                #    should make sure only to respond with what is shaped (if possible).
+
         return final_parsed
 
     def _handle_map(self, shape, value):

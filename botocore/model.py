@@ -228,6 +228,15 @@ class StructureShape(Shape):
         return shape_members
 
     @CachedProperty
+    def serialized_ref_members(self):
+        """Map containing the serialized name of the members to their name and shape."""
+        serialized_ref_members_map = self.MAP_TYPE()
+        for member_name, member_shape in self.members.items():
+            name = member_shape.serialization.get('name', member_name)
+            serialized_ref_members_map[name] = (member_name, member_shape)
+        return serialized_ref_members_map
+
+    @CachedProperty
     def event_stream_name(self):
         for member_name, member in self.members.items():
             if member.serialization.get('eventstream'):

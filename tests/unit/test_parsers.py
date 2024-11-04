@@ -442,6 +442,27 @@ class TestTaggedUnions(unittest.TestCase):
                 any(warning_message in log for log in log_messages)
             )
 
+    def test_base_json_parser_handles_serialization_name(self):
+        parser = parsers.JSONParser()
+        response = b'{"serializedStr": "mystring"}'
+        headers = {'x-amzn-requestid': 'request-id'}
+        output_shape = model.StructureShape(
+            'OutputShape',
+            {
+                'type': 'structure',
+                'members': {
+                    'Str': {
+                        'shape': 'StringType',
+                        "locationName":"serializedStr"
+                    }
+                },
+            },
+            model.ShapeResolver({'StringType': {'type': 'string'}}),
+        )
+        response = {'body': response, 'headers': headers, 'status_code': 200}
+        parsed = parser.parse(response, output_shape)
+        self.assertEqual(parsed['Str'], 'mystring')
+
     def test_base_json_parser_handles_unknown_member(self):
         parser = parsers.JSONParser()
         response = b'{"Foo": "mystring"}'
